@@ -1,0 +1,6 @@
+*.plist
+compile_commands.json
+*.a
+robolog
+.idea/
+.cache/
