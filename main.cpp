@@ -41,7 +41,7 @@ int main() {
 		char charBuf[256];
 
 		while(!stop) {
-			if(poll(&fd, 1, 0)) {
+			if(poll(&fd, 1, 1)) {
 				int chars = read(sock, charBuf, 256);
 				canAccessBuffer.lock();
 				//                buffer.reserve(length + chars);                for(char c : chars) buffer.push_back(c);
@@ -74,14 +74,14 @@ int main() {
 
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
-  ImGuiIO& io = ImGui::GetIO(); (void)io;
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
-  io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
+	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
+	io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 	io.IniFilename = nullptr;
 
-//	ImFont* mono = io.Fonts->AddFontFromFileTTF("./UbuntuMono/UbuntuMono-Regular.ttf", 13);
-//	ImFont* bold = io.Fonts->AddFontFromFileTTF("./UbuntuMono/UbuntuMono-Bold.ttf", 13);
-//	ImGui::PushFont(mono);
+	//	ImFont* mono = io.Fonts->AddFontFromFileTTF("./UbuntuMono/UbuntuMono-Regular.ttf", 13);
+	//	ImFont* bold = io.Fonts->AddFontFromFileTTF("./UbuntuMono/UbuntuMono-Bold.ttf", 13);
+	//	ImGui::PushFont(mono);
 
 
 	std::map<char, std::function<void()>> coloringFunctions;
@@ -94,89 +94,144 @@ int main() {
 			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(1, 1, 1, 1);
 			});
 
-  ImGui::StyleColorsDark();
+	ImGui::StyleColorsDark();
 
-  ImGui_ImplGlfw_InitForOpenGL(window, true);
-  ImGui_ImplOpenGL3_Init();
+	ImGui_ImplGlfw_InitForOpenGL(window, true);
+	ImGui_ImplOpenGL3_Init();
 
 	while(!glfwWindowShouldClose(window)) {
 		glfwPollEvents();
 		ImGui_ImplOpenGL3_NewFrame();
-    ImGui_ImplGlfw_NewFrame();
-    ImGui::NewFrame();
+		ImGui_ImplGlfw_NewFrame();
+		ImGui::NewFrame();
 
 		ImGui::SetNextWindowSize(ImGui::GetMainViewport()->Size);
 		ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
 		ImGuiWindowFlags f = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse;
 		ImGui::Begin("Robolog", nullptr, f);
 
-		if(ImGui::CollapsingHeader("thing1")) {
+		if(ImGui::CollapsingHeader("raw")) {
 			if(!buffer.empty()) {
 				canAccessBuffer.lock();
-				for(size_t offset = 0; offset < buffer.size(); ) {
-					size_t end = 0;
-					bool breaker = false;
-					std::cout << "hi" << std::endl;
-					while(offset + end < buffer.size() && !breaker) {
-						if(buffer[offset + end] == '\\') {
-							coloringFunctions[buffer[offset + end + 1]]();
-							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end - 1);
-							ImGui::SameLine();
-							end += 2;
-							breaker = true;
-							std::cout << "here" << std::endl;
-						}
-						else if(buffer[offset + end] == '\n') {
-							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-							end += 1;
-							breaker = true;
-							std::cout << "there" << std::endl;
-						}
-
-						else end += 1;
-					}
-
-					if(!breaker) {
-						ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-					}
-
-
-					/*
-					bool newline = false;
-					while(offset + end < buffer.size() && buffer[offset + end] != '\\') {
-						if(buffer[offset + end] == '\n') newline = true;
-						end++;
-					}
-					if(offset + end < buffer.size() - 1) end++;
-					char color = buffer[offset] == '\\' ? buffer[offset + 1] : 'N';
-					auto f = coloringFunctions[color];
-					auto newliner = [newline]() {if(!newline) ImGui::SameLine();};
-					if(color == 'N') f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end); newliner();});
-					else f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset + 2, &buffer.front() + offset + end - 1); newliner();});
-					*/
-					offset += end;
+				for(char c : buffer) {
+					if(c == '\n') ImGui::TextUnformatted("\\n");
+					else if(c == ' ') ImGui::TextUnformatted("_");
+					else ImGui::TextUnformatted(&c);
 				}
 				canAccessBuffer.unlock();
 			}
 		}
 
+		if(ImGui::CollapsingHeader("thing1")) {
+			if(!buffer.empty()) {
+				canAccessBuffer.lock();
+				for(size_t offset = 0; offset < buffer.size(); ) {
+					size_t end = 0;
+					bool didbreak = false;
+
+					while(offset + end < buffer.size()) {
+						if(buffer[offset + end] == '\n') {
+							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+							didbreak = true;
+							break;
+						}
+
+						else if(buffer[offset + end] == '\\') {
+							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+							coloringFunctions[buffer[offset + end + 1]]();
+							ImGui::SameLine();
+							didbreak = true;
+							end++;
+							break;
+						}
+
+						end++;
+					}
+
+					if(!didbreak) {
+						ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+					}
+
+
+					offset += end + 1;
+
+
+
+
+
+
+
+
+					/*
+						 while(offset + end < buffer.size() && !breaker) {
+						 if(buffer[offset + end] == '\\') {
+						 coloringFunctions[buffer[offset + end + 1]]();
+						 ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end - 1);
+						 ImGui::SameLine();
+						 end += 2;
+						 breaker = true;
+						 std::cout << "here" << std::endl;
+						 }
+						 else if(buffer[offset + end] == '\n') {
+						 ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+						 end += 1;
+						 breaker = true;
+						 std::cout << "there" << std::endl;
+						 }
+
+						 else end += 1;
+						 }
+
+						 if(!breaker) {
+						 ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+						 }
+
+
+
+						 bool newline = false;
+						 while(offset + end < buffer.size() && buffer[offset + end] != '\\') {
+						 if(buffer[offset + end] == '\n') newline = true;
+						 end++;
+						 }
+						 if(offset + end < buffer.size() - 1) end++;
+						 char color = buffer[offset] == '\\' ? buffer[offset + 1] : 'N';
+						 auto f = coloringFunctions[color];
+						 auto newliner = [newline]() {if(!newline) ImGui::SameLine();};
+						 if(color == 'N') f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end); newliner();});
+						 else f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset + 2, &buffer.front() + offset + end - 1); newliner();});
+						 */
+				}
+				canAccessBuffer.unlock();
+				ImGui::StyleColorsDark();
+			}
+		}
+
 		if(ImGui::CollapsingHeader("hing")) {
-			ImGui::TextUnformatted("Hello");
-			ImGui::SameLine();
-			ImGui::TextUnformatted("World!");
+			std::vector<char> eee;
+			eee.push_back('h');
+			eee.push_back('e');
+			eee.push_back('e');
+			eee.push_back('l');
+			eee.push_back('o');
+			std::string s = "hello\n";
+			std::string r = "world\n";
+			std::string t = "universe\n";
+			ImGui::TextUnformatted(s.c_str());
+			ImGui::TextUnformatted(r.c_str());
+			ImGui::TextUnformatted(t.c_str());
 		}
 
 		ImGui::End();
 
-	  ImGui::Render();
-    int display_w, display_h;
-    glfwGetFramebufferSize(window, &display_w, &display_h);
-    glViewport(0, 0, display_w, display_h);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT);
-    ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+		ImGui::Render();
+		int display_w, display_h;
+		glfwGetFramebufferSize(window, &display_w, &display_h);
+		glViewport(0, 0, display_w, display_h);
+		glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+		glClear(GL_COLOR_BUFFER_BIT);
+		ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-    glfwSwapBuffers(window);
+		glfwSwapBuffers(window);
 	}
 
 	ImGui_ImplOpenGL3_Shutdown();
