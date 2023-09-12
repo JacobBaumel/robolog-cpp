@@ -84,16 +84,14 @@ int main() {
 //	ImGui::PushFont(mono);
 
 
-	std::map<char, std::function<void(std::function<void()>)>> coloringFunctions;
+	std::map<char, std::function<void()>> coloringFunctions;
 
-	coloringFunctions.emplace('E', [](std::function<void()> text) {
+	coloringFunctions.emplace('E', []() {
 			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(1, 0, 0, 1);
-			text();
 			});
-	coloringFunctions.emplace('N', [](std::function<void()> text) {text();});
-	coloringFunctions.emplace('R', [](std::function<void()> text) {
+	coloringFunctions.emplace('N', []() {});
+	coloringFunctions.emplace('R', []() {
 			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(1, 1, 1, 1);
-			text();
 			});
 
   ImGui::StyleColorsDark();
@@ -117,6 +115,33 @@ int main() {
 				canAccessBuffer.lock();
 				for(size_t offset = 0; offset < buffer.size(); ) {
 					size_t end = 0;
+					bool breaker = false;
+					std::cout << "hi" << std::endl;
+					while(offset + end < buffer.size() && !breaker) {
+						if(buffer[offset + end] == '\\') {
+							coloringFunctions[buffer[offset + end + 1]]();
+							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end - 1);
+							ImGui::SameLine();
+							end += 2;
+							breaker = true;
+							std::cout << "here" << std::endl;
+						}
+						else if(buffer[offset + end] == '\n') {
+							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+							end += 1;
+							breaker = true;
+							std::cout << "there" << std::endl;
+						}
+
+						else end += 1;
+					}
+
+					if(!breaker) {
+						ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
+					}
+
+
+					/*
 					bool newline = false;
 					while(offset + end < buffer.size() && buffer[offset + end] != '\\') {
 						if(buffer[offset + end] == '\n') newline = true;
@@ -128,10 +153,17 @@ int main() {
 					auto newliner = [newline]() {if(!newline) ImGui::SameLine();};
 					if(color == 'N') f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end); newliner();});
 					else f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset + 2, &buffer.front() + offset + end - 1); newliner();});
+					*/
 					offset += end;
 				}
 				canAccessBuffer.unlock();
 			}
+		}
+
+		if(ImGui::CollapsingHeader("hing")) {
+			ImGui::TextUnformatted("Hello");
+			ImGui::SameLine();
+			ImGui::TextUnformatted("World!");
 		}
 
 		ImGui::End();
