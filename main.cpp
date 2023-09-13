@@ -93,6 +93,12 @@ int main() {
 	coloringFunctions.emplace('R', []() {
 			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(1, 1, 1, 1);
 			});
+	coloringFunctions.emplace('T', []() {
+			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(1, 1, 0, 1);
+			});
+	coloringFunctions.emplace('H', []() {
+			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(0.1, 0.1, 1, 1);
+			});
 
 	ImGui::StyleColorsDark();
 
@@ -139,7 +145,7 @@ int main() {
 						else if(buffer[offset + end] == '\\') {
 							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
 							coloringFunctions[buffer[offset + end + 1]]();
-							ImGui::SameLine();
+							ImGui::SameLine(0, 0);
 							didbreak = true;
 							end++;
 							break;
@@ -152,54 +158,7 @@ int main() {
 						ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
 					}
 
-
 					offset += end + 1;
-
-
-
-
-
-
-
-
-					/*
-						 while(offset + end < buffer.size() && !breaker) {
-						 if(buffer[offset + end] == '\\') {
-						 coloringFunctions[buffer[offset + end + 1]]();
-						 ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end - 1);
-						 ImGui::SameLine();
-						 end += 2;
-						 breaker = true;
-						 std::cout << "here" << std::endl;
-						 }
-						 else if(buffer[offset + end] == '\n') {
-						 ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-						 end += 1;
-						 breaker = true;
-						 std::cout << "there" << std::endl;
-						 }
-
-						 else end += 1;
-						 }
-
-						 if(!breaker) {
-						 ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-						 }
-
-
-
-						 bool newline = false;
-						 while(offset + end < buffer.size() && buffer[offset + end] != '\\') {
-						 if(buffer[offset + end] == '\n') newline = true;
-						 end++;
-						 }
-						 if(offset + end < buffer.size() - 1) end++;
-						 char color = buffer[offset] == '\\' ? buffer[offset + 1] : 'N';
-						 auto f = coloringFunctions[color];
-						 auto newliner = [newline]() {if(!newline) ImGui::SameLine();};
-						 if(color == 'N') f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end); newliner();});
-						 else f([&buffer, &newliner, offset, end]() {ImGui::TextUnformatted(&buffer.front() + offset + 2, &buffer.front() + offset + end - 1); newliner();});
-						 */
 				}
 				canAccessBuffer.unlock();
 				ImGui::StyleColorsDark();
