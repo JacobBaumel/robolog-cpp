@@ -15,6 +15,16 @@
 #include <functional>
 #include <poll.h>
 
+struct section {
+	std::string name;
+	std::vector<char> buffer;
+};
+
+
+std::map<char, std::function<void()>> coloringFunctions;
+
+void drawSection(const section& sect);
+
 int main() {
 	int sock;
 	sockaddr_in add;
@@ -27,30 +37,37 @@ int main() {
 		return -1;
 	}
 
-	std::vector<char> buffer;
 	std::mutex canAccessBuffer;
 	std::atomic_bool stop{false};
-	auto f = [&stop, &sock, &buffer, &canAccessBuffer]() {
-		size_t length = 0;
+	std::map<std::string, section*> sections;
 
+	auto f = [&stop, &sock, &sections, &canAccessBuffer]() {
 		pollfd fd;
 		memset(&fd, 0, sizeof(pollfd));
 		fd.fd = sock;
 		fd.events = POLLIN;
 
+		std::string curSection;
+		bool isCurSectioning = false;
 		char charBuf[256];
 
 		while(!stop) {
 			if(poll(&fd, 1, 1)) {
 				int chars = read(sock, charBuf, 256);
 				canAccessBuffer.lock();
-				//                buffer.reserve(length + chars);                for(char c : chars) buffer.push_back(c);
-
-				//                buffer.insert(buffer.begin() + length, charBuf, charBuf + chars);
 				for(int i = 0; i < chars; i++) {
-					buffer.push_back(charBuf[i]);
+					if(charBuf[i] == (char) 30) {
+						isCurSectioning = !isCurSectioning;
+						if(isCurSectioning) curSection = "";
+						else if(!sections.contains(curSection)) {
+							section* s = new section();
+							s->name = curSection;
+							sections.emplace(std::pair<std::string, section*>(curSection, s));
+						}
+					}
+					else if(isCurSectioning) curSection.push_back(charBuf[i]);
+					else if(!curSection.empty()) sections[curSection]->buffer.push_back(charBuf[i]);
 				}
-				length += chars;
 				canAccessBuffer.unlock();
 			}
 		}
@@ -84,8 +101,6 @@ int main() {
 	//	ImGui::PushFont(mono);
 
 
-	std::map<char, std::function<void()>> coloringFunctions;
-
 	coloringFunctions.emplace('E', []() {
 			ImGui::GetStyle().Colors[ImGuiCol_Text] = ImVec4(1, 0, 0, 1);
 			});
@@ -115,70 +130,14 @@ int main() {
 		ImGui::SetNextWindowPos(ImGui::GetMainViewport()->Pos);
 		ImGuiWindowFlags f = ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoSavedSettings | ImGuiWindowFlags_NoCollapse;
 		ImGui::Begin("Robolog", nullptr, f);
+		
+		canAccessBuffer.lock();
 
-		if(ImGui::CollapsingHeader("raw")) {
-			if(!buffer.empty()) {
-				canAccessBuffer.lock();
-				for(char c : buffer) {
-					if(c == '\n') ImGui::TextUnformatted("\\n");
-					else if(c == ' ') ImGui::TextUnformatted("_");
-					else ImGui::TextUnformatted(&c);
-				}
-				canAccessBuffer.unlock();
-			}
+		for(std::pair<std::string, section*> pair : sections) {
+			drawSection(*pair.second);
 		}
 
-		if(ImGui::CollapsingHeader("thing1")) {
-			if(!buffer.empty()) {
-				canAccessBuffer.lock();
-				for(size_t offset = 0; offset < buffer.size(); ) {
-					size_t end = 0;
-					bool didbreak = false;
-
-					while(offset + end < buffer.size()) {
-						if(buffer[offset + end] == '\n') {
-							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-							didbreak = true;
-							break;
-						}
-
-						else if(buffer[offset + end] == '\\') {
-							ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-							coloringFunctions[buffer[offset + end + 1]]();
-							ImGui::SameLine(0, 0);
-							didbreak = true;
-							end++;
-							break;
-						}
-
-						end++;
-					}
-
-					if(!didbreak) {
-						ImGui::TextUnformatted(&buffer.front() + offset, &buffer.front() + offset + end);
-					}
-
-					offset += end + 1;
-				}
-				canAccessBuffer.unlock();
-				ImGui::StyleColorsDark();
-			}
-		}
-
-		if(ImGui::CollapsingHeader("hing")) {
-			std::vector<char> eee;
-			eee.push_back('h');
-			eee.push_back('e');
-			eee.push_back('e');
-			eee.push_back('l');
-			eee.push_back('o');
-			std::string s = "hello\n";
-			std::string r = "world\n";
-			std::string t = "universe\n";
-			ImGui::TextUnformatted(s.c_str());
-			ImGui::TextUnformatted(r.c_str());
-			ImGui::TextUnformatted(t.c_str());
-		}
+		canAccessBuffer.unlock();
 
 		ImGui::End();
 
@@ -204,4 +163,45 @@ int main() {
 	socketThread.join();
 	std::cout << "closing socket" << std::endl;
 	close(sock);
+
+	for(std::pair<std::string, section*> pair : sections) delete pair.second;
+}
+
+
+
+void drawSection(const section& sect) {
+	if(ImGui::CollapsingHeader(sect.name.c_str())) {
+		if(!sect.buffer.empty()) {
+			for(size_t offset = 0; offset < sect.buffer.size(); ) {
+				size_t end = 0;
+				bool didbreak = false;
+
+				while(offset + end < sect.buffer.size()) {
+					if(sect.buffer[offset + end] == '\n') {
+						ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+						didbreak = true;
+						break;
+					}
+
+					else if(sect.buffer[offset + end] == (char) 29) {
+						ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+						coloringFunctions[sect.buffer[offset + end + 1]]();
+						ImGui::SameLine(0, 0);
+						didbreak = true;
+						end++;
+						break;
+					}
+
+					end++;
+				}
+
+				if(!didbreak) {
+					ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+				}
+
+				offset += end + 1;
+			}
+			ImGui::StyleColorsDark();
+		}
+	}
 }
