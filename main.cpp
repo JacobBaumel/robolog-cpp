@@ -1,4 +1,3 @@
-// having issue where deleted sections cant be used again
 #include <GLFW/glfw3.h>
 #include <atomic>
 #include <mutex>
@@ -150,8 +149,11 @@ int main() {
 		for(std::string s : toDelete) {
 			section* sect = sections[s];
 			sections.erase(s);
+			std::cout << s << std::endl;
 			delete sect;
 		}
+
+		toDelete.clear();
 
 		canAccessBuffer.unlock();
 
