@@ -1,3 +1,4 @@
+// having issue where deleted sections cant be used again
 #include <GLFW/glfw3.h>
 #include <atomic>
 #include <mutex>
@@ -18,10 +19,12 @@
 struct section {
 	std::string name;
 	std::vector<char> buffer;
+	mutable bool mouse;
 };
 
 
 std::map<char, std::function<void()>> coloringFunctions;
+std::vector<std::string> toDelete;
 
 void drawSection(const section& sect);
 
@@ -30,7 +33,7 @@ int main() {
 	sockaddr_in add;
 	sock = socket(AF_INET, SOCK_STREAM, 0);
 	add.sin_family = AF_INET;
-	add.sin_port = htons(7503);
+	add.sin_port = htons(7502);
 	inet_pton(AF_INET, "127.0.0.1", &add.sin_addr);
 	if(connect(sock, (sockaddr*) &add, sizeof(add)) < 0) {
 		std::cout << "failed to connect to server" << std::endl;
@@ -40,7 +43,7 @@ int main() {
 	std::mutex canAccessBuffer;
 	std::atomic_bool stop{false};
 	std::map<std::string, section*> sections;
-
+	
 	auto f = [&stop, &sock, &sections, &canAccessBuffer]() {
 		pollfd fd;
 		memset(&fd, 0, sizeof(pollfd));
@@ -62,11 +65,18 @@ int main() {
 						else if(!sections.contains(curSection)) {
 							section* s = new section();
 							s->name = curSection;
-							sections.emplace(std::pair<std::string, section*>(curSection, s));
+							sections.emplace(std::pair(curSection, s));
 						}
 					}
 					else if(isCurSectioning) curSection.push_back(charBuf[i]);
-					else if(!curSection.empty()) sections[curSection]->buffer.push_back(charBuf[i]);
+					else if(!curSection.empty()) {
+						if(!sections.contains(curSection)) {
+							section* s = new section();
+							s->name = curSection;
+							sections.emplace(std::pair(curSection, s));
+						}
+						sections[curSection]->buffer.push_back(charBuf[i]);
+					}
 				}
 				canAccessBuffer.unlock();
 			}
@@ -137,6 +147,12 @@ int main() {
 			drawSection(*pair.second);
 		}
 
+		for(std::string s : toDelete) {
+			section* sect = sections[s];
+			sections.erase(s);
+			delete sect;
+		}
+
 		canAccessBuffer.unlock();
 
 		ImGui::End();
@@ -171,37 +187,48 @@ int main() {
 
 void drawSection(const section& sect) {
 	if(ImGui::CollapsingHeader(sect.name.c_str())) {
-		if(!sect.buffer.empty()) {
-			for(size_t offset = 0; offset < sect.buffer.size(); ) {
-				size_t end = 0;
-				bool didbreak = false;
+		ImGui::Checkbox("Scroll to bottom", &sect.mouse);
+		ImGui::SameLine();
+		if(ImGui::Button("Delete Section")) toDelete.push_back(sect.name);
 
-				while(offset + end < sect.buffer.size()) {
-					if(sect.buffer[offset + end] == '\n') {
-						ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
-						didbreak = true;
-						break;
-					}
+		if(ImGui::BeginChild("scrolling", ImVec2(0, 150), false, ImGuiWindowFlags_HorizontalScrollbar)) {
+			if(!sect.buffer.empty()) {
+				for(size_t offset = 0; offset < sect.buffer.size(); ) {
+					size_t end = 0;
+					bool didbreak = false;
 
-					else if(sect.buffer[offset + end] == (char) 29) {
-						ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
-						coloringFunctions[sect.buffer[offset + end + 1]]();
-						ImGui::SameLine(0, 0);
-						didbreak = true;
+					while(offset + end < sect.buffer.size()) {
+						if(sect.buffer[offset + end] == '\n') {
+							ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+							didbreak = true;
+							break;
+						}
+
+						else if(sect.buffer[offset + end] == (char) 29) {
+							ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+							coloringFunctions[sect.buffer[offset + end + 1]]();
+							ImGui::SameLine(0, 0);
+							didbreak = true;
+							end++;
+							break;
+						}
+
 						end++;
-						break;
 					}
 
-					end++;
-				}
+					if(!didbreak) {
+						ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+					}
 
-				if(!didbreak) {
-					ImGui::TextUnformatted(&sect.buffer.front() + offset, &sect.buffer.front() + offset + end);
+					offset += end + 1;
 				}
-
-				offset += end + 1;
+				ImGui::StyleColorsDark();
 			}
-			ImGui::StyleColorsDark();
+
+			if(ImGui::GetIO().MouseWheel != 0) sect.mouse = false;
+			if(sect.mouse) ImGui::SetScrollHereY(1.0f);
+
 		}
+		ImGui::EndChild();
 	}
 }
